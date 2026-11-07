@@ -28,16 +28,16 @@
 	<body>
 		<div class="container">
 		<h1>CS184/284A Fall 2026 Homework 3 Write-Up</h1>
-		<div style="text-align: center;">Names: </div>
+		<div style="text-align: center;">Names: Jameson Liu</div>
 
 		<br>
 
-		Link to webpage: (TODO) <a href="https://cs184.eecs.berkeley.edu/fa26">cs184.eecs.berkeley.edu/fa26</a>
-		Link to GitHub repository: (TODO) <a href="https://cs184.eecs.berkeley.edu/fa26">cs184.eecs.berkeley.edu/fa26</a>
+		Link to webpage: <a href="https://cal-cs184-student.github.io/hw3-jl-writeup/">cal-cs184-student.github.io/hw3-jl-writeup/</a>
+		<br>
+		Link to GitHub repository: <a href="https://github.com/cal-cs184-student/hw3-jl">github.com/cal-cs184-student/hw3-jl</a>
 		
 		<figure>
 			<img src="assets/cornell.png" alt="Cornell Boxes with Bunnies" style="width:70%"/>
-			<figcaption>You can add images with captions!</figcaption>
 		</figure>
 
 		<!--
@@ -45,62 +45,198 @@
 		-->
 
 		<h2>Overview</h2>
-		Give a high-level overview of what you implemented in this homework. Think about what you've built as a whole. Share your thoughts on what interesting things you've learned from completing the homework.
+		I built a Monte Carlo path tracer that generates camera rays, intersects scene geometry, and uses a bounding volume hierarchy to speed up intersection tests. It estimates direct and indirect illumination and uses adaptive sampling to reduce the number of rays spent on converged pixels.
+		<br><br>
+		The most useful lesson was how each stage depends on the previous one.
+		A small intersection error affects BVH traversal and shadow rays, while insufficient sampling appears as noise even when the lighting equations are correct.
 
 		<h2>Part 1: Ray Generation and Scene Intersection</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		For each pixel sample, I jitter a point inside the pixel and normalize its image coordinates. I map that point to the camera-space sensor at z = -1 using the horizontal and vertical fields of view. The ray starts at the camera position; its direction passes through the sensor point, is rotated into world space, and is normalized. Its valid interval runs from the near clip distance to the far clip distance.
+		<br><br>
+		For triangle intersections, I used the Möller-Trumbore algorithm.
+		It uses the triangle's two edges and the ray direction to solve for the ray distance and two barycentric coordinates. A zero determinant means there is no unique intersection; otherwise, I reject coordinates outside the triangle or a distance outside the ray interval. At a hit, I interpolate the vertex normals using the barycentric coordinates and normalize the result.
+		<br><br>
+		For spheres, I substitute the ray equation into the sphere equation and solve the resulting quadratic.
+		I choose the nearest valid root and store its distance, normal, primitive, and BSDF.
+		After a hit, I tighten the ray's maximum distance so later tests retain only the closest intersection.
 
-		<p>Here is an example 2x2 gridlike structure using an HTML table. Each <b>tr</b> is a row and each <b>td</b> is a column in that row. You might find this useful for framing and showing your result images in an organized fashion.</p>
+		<br><br>
 		<div style="display: flex; flex-direction: column; align-items: center;">
 			<table style="width: 100%; text-align: center; border-collapse: collapse;">
 			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				<td style="width: 33.33%; text-align: center;">
+				  <img src="assets/part_1_CBempty.png" style="width: 100%; max-width: 400px; height: auto;"/>
+				  <figcaption>Empty</figcaption>
 				</td>
-				<td style="text-align: center;">
-				  <img src="assets/cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				<td style="width: 33.33%; text-align: center;">
+				  <img src="assets/part_1_CBgems.png" style="width: 100%; max-width: 400px; height: auto;"/>
+				  <figcaption>Gems</figcaption>
 				</td>
-			  </tr>
-			  <tr>
-				<td style="text-align: center;">
-				  <img src="assets/cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
-				</td>
-				<td style="text-align: center;">
-				  <img src="assets/cornell.png" width="400px"/>
-				  <figcaption>Caption goes here.</figcaption>
+				<td style="width: 33.33%; text-align: center;">
+				  <img src="assets/part_1_banana.png" style="width: 100%; max-width: 400px; height: auto;"/>
+				  <figcaption>Banana</figcaption>
 				</td>
 			  </tr>
 			</table>
 		</div>
 		
 		<h2>Part 2: Bounding Volume Hierarchy</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		I build the BVH recursively. Each node expands a bounding box around its primitives, and nodes with at most four primitives become leaves.
+		Otherwise, I split along the bounding-box axis with the greatest extent, using the mean primitive-centroid coordinate as the splitting point.
+		If every centroid lies on one side of that point, I split the range at its midpoint so recursion always makes progress.
+		<br><br>
+		Traversal first tests the ray against the node bounding box. A miss skips the subtree.
+		Leaf nodes test their primitives, while internal nodes recurse into both children.
+		For shadow rays, traversal can stop at the first hit. For visible-surface rays, it continues so the closest hit is retained.
+
+		<br><br>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td style="width: 33.33%; text-align: center;"><img src="assets/part_2_walle.png" style="width: 100%; max-width: 400px; height: auto;"/><figcaption>Wall-E</figcaption></td>
+				<td style="width: 33.33%; text-align: center;"><img src="assets/part_2_maxplanck.png" style="width: 100%; max-width: 400px; height: auto;"/><figcaption>Max Planck</figcaption></td>
+				<td style="width: 33.33%; text-align: center;"><img src="assets/part_2_CBlucy.png" style="width: 100%; max-width: 400px; height: auto;"/><figcaption>Lucy</figcaption></td>
+			  </tr>
+			</table>
+		</div>
+		<br>
+
+		<table style="width: 100%; text-align: center; border-collapse: collapse;" border="1">
+			<tr><th>Scene</th><th>Without BVH</th><th>With BVH</th></tr>
+			<tr><td>Empty</td><td>0.32 s</td><td>0.30 s</td></tr>
+			<tr><td>Banana</td><td>0.38 s</td><td>0.04 s</td></tr>
+			<tr><td>Cow</td><td>0.87 s</td><td>0.07 s</td></tr>
+		</table>
+		<br>
+		These measurements used 480×360 renders and eight threads. The empty scene contains very little geometry, so the hierarchy only reduces the render time from 0.32 s to 0.30 s. The banana scene shows a much larger difference, falling from 0.38 s to 0.04 s once rays can skip groups of primitives. The cow scene benefits most in this set, dropping from 0.87 s to 0.07 s. The larger scenes have more geometry for missed bounding boxes to eliminate, which is why the hierarchy matters more as scene complexity increases.
 
 		<h2>Part 3: Direct Illumination</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		Uniform hemisphere sampling draws directions uniformly over the local hemisphere.
+		For each direction, I cast a shadow ray and add the emitted radiance at its first hit, weighted by the BSDF, cosine term, and inverse PDF.
+		<br><br>
+		Importance sampling draws directions from each scene light. Delta lights use one sample, while area lights use the configured number of light samples.
+		I trace a shadow ray that stops just before the light and add an unoccluded sample using its radiance, BSDF value, cosine factor, and PDF.
+
+		<br><br>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td><img src="assets/part_3_CBempty_hemisphere.png" width="400px"/><figcaption>Empty, uniform hemisphere sampling</figcaption></td>
+				<td><img src="assets/part_3_CBempty_importance.png" width="400px"/><figcaption>Empty, light sampling</figcaption></td>
+			  </tr>
+			  <tr>
+				<td><img src="assets/part_3_CBspheres_lambertian_hemisphere.png" width="400px"/><figcaption>Spheres, uniform hemisphere sampling</figcaption></td>
+				<td><img src="assets/part_3_CBspheres_lambertian_importance.png" width="400px"/><figcaption>Spheres, light sampling</figcaption></td>
+			  </tr>
+			</table>
+		</div>
+		<br>
+
+		For the bunny scene, with one camera sample per pixel and light sampling, increasing the number of light samples smooths the bunny's soft shadow by averaging more area-light samples.
+		<br><br>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td><img src="assets/part_3_CBbunny_1.png" width="400px"/><figcaption>1 light ray</figcaption></td>
+				<td><img src="assets/part_3_CBbunny_4.png" width="400px"/><figcaption>4 light rays</figcaption></td>
+			  </tr>
+			  <tr>
+				<td><img src="assets/part_3_CBbunny_16.png" width="400px"/><figcaption>16 light rays</figcaption></td>
+				<td><img src="assets/part_3_CBbunny_64.png" width="400px"/><figcaption>64 light rays</figcaption></td>
+			  </tr>
+			</table>
+		</div>
+		<br>
+		Uniform hemisphere sampling wastes many samples on directions that never reach a light, especially when an area light occupies only a small portion of the hemisphere. The uniform-sampling images are therefore visibly noisier in both scenes. Light sampling aims directly at the light, so more samples contribute useful illumination. In these renders, it produces cleaner walls and shadowed regions.
 
 		<h2>Part 4: Global Illumination</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		At each hit, I add the direct-light estimate, sample an incoming BSDF direction, and recursively trace a new ray from the surface.
+		The recursive contribution is weighted by the sampled BSDF, cosine term, and inverse PDF.
+		The first indirect bounce is always traced when the depth limit permits it. Later bounces use Russian Roulette with continuation probability 0.65; surviving contributions are divided by that probability. With accumulation disabled, the renderer keeps only the requested bounce; directly visible emission appears only at depth zero. The dragon is black because its mirror material is outside the diffuse BSDF implementation for this assignment. In the bunny comparison, direct light leaves the underside dark, while indirect light fills that area and carries color from the walls. Both images include the directly visible emitter.
+
+		<br><br>
+		<div style="display: flex; flex-direction: column; align-items: center;">
+			<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			  <tr>
+				<td><img src="assets/part_4_CBbunny_global_1024.png" width="400px"/><figcaption>Bunny, global illumination, 1024 samples per pixel</figcaption></td>
+				<td><img src="assets/part_4_CBdragon_global_1024.png" width="400px"/><figcaption>Dragon, global illumination, 1024 samples per pixel</figcaption></td>
+			  </tr>
+			  <tr>
+				<td><img src="assets/part_4_CBbunny_direct_1024.png" width="400px"/><figcaption>Bunny, direct illumination only, 1024 samples per pixel</figcaption></td>
+				<td><img src="assets/part_4_CBbunny_indirect_1024.png" width="400px"/><figcaption>Bunny, indirect illumination only, 1024 samples per pixel</figcaption></td>
+			  </tr>
+			</table>
+		</div>
+
+		<h3>Individual and accumulated bounces</h3>
+		The second-bounce image shows light that has reflected from another surface before reaching the visible surface. It fills some of the bunny's dark areas and carries color from the walls. The third bounce is dimmer, but adds more indirect light and color. A basic rasterized image with direct lighting alone would miss these interreflections, leaving those areas darker. The accumulated images combine these contributions and become brighter as the depth increases.
+		<br><br>
+		<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			<tr><th>Max ray depth</th><th>Unaccumulated bounce</th><th>Accumulated bounces</th></tr>
+			<tr><td>0</td><td><img src="assets/part_4_CBbunny_unaccum_0.png" width="250px"/></td><td><img src="assets/part_4_CBbunny_accum_0.png" width="250px"/></td></tr>
+			<tr><td>1</td><td><img src="assets/part_4_CBbunny_unaccum_1.png" width="250px"/></td><td><img src="assets/part_4_CBbunny_accum_1.png" width="250px"/></td></tr>
+			<tr><td>2</td><td><img src="assets/part_4_CBbunny_unaccum_2.png" width="250px"/></td><td><img src="assets/part_4_CBbunny_accum_2.png" width="250px"/></td></tr>
+			<tr><td>3</td><td><img src="assets/part_4_CBbunny_unaccum_3.png" width="250px"/></td><td><img src="assets/part_4_CBbunny_accum_3.png" width="250px"/></td></tr>
+			<tr><td>4</td><td><img src="assets/part_4_CBbunny_unaccum_4.png" width="250px"/></td><td><img src="assets/part_4_CBbunny_accum_4.png" width="250px"/></td></tr>
+			<tr><td>5</td><td><img src="assets/part_4_CBbunny_unaccum_5.png" width="250px"/></td><td><img src="assets/part_4_CBbunny_accum_5.png" width="250px"/></td></tr>
+		</table>
+
+		<h3>Russian Roulette</h3>
+		<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			<tr>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_russian_0.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>Max depth 0</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_russian_1.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>Max depth 1</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_russian_2.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>Max depth 2</figcaption></td>
+			</tr>
+			<tr>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_russian_3.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>Max depth 3</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_russian_4.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>Max depth 4</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_russian_100.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>Max depth 100</figcaption></td>
+			</tr>
+		</table>
+
+		<h3>Samples per pixel</h3>
+		These renders use four light rays. More samples per pixel average independent path estimates, reducing noise most visibly in indirect-light and soft-shadow regions.
+		<br><br>
+		<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			<tr>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_1.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>1 sample per pixel</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_2.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>2 samples per pixel</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_4.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>4 samples per pixel</figcaption></td>
+			</tr>
+			<tr>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_8.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>8 samples per pixel</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_16.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>16 samples per pixel</figcaption></td>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_64.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>64 samples per pixel</figcaption></td>
+			</tr>
+			<tr>
+				<td style="width: 33.33%;"><img src="assets/part_4_CBbunny_1024.png" style="width: 100%; max-width: 250px; height: auto;"/><figcaption>1024 samples per pixel</figcaption></td>
+			</tr>
+		</table>
 
 		<h2>Part 5: Adaptive Sampling</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+		Adaptive sampling gives difficult pixels more samples and stops early on pixels that have converged.
+		For each pixel, I accumulate illuminance and squared illuminance. After each batch, I compute their mean and unbiased variance, then stop if the estimated 95% confidence interval's half-width is at most the tolerance times the mean. I clamp negative variance from floating-point roundoff to zero and store the number of samples used.
+		<br><br>
+		In the rate images, smooth walls converge early, while the bunny, spheres, and shadow boundaries often need more samples. Blue indicates a low fraction of the maximum sample count and red indicates a high fraction.
+		The following use at least 2048 maximum samples per pixel, one light sample, and a maximum ray depth of at least five.
+		<br><br>
+		<table style="width: 100%; text-align: center; border-collapse: collapse;">
+			<tr><th>Scene</th><th>Adaptive sampling rate</th><th>Rendered result</th></tr>
+			<tr>
+				<td>Bunny</td>
+				<td><img src="assets/part_5_CBbunny_2048_rate.png" width="300px"/></td>
+				<td><img src="assets/part_5_CBbunny_2048.png" width="300px"/></td>
+			</tr>
+			<tr>
+				<td>Spheres</td>
+				<td><img src="assets/part_5_CBspheres_lambertian_2048_rate.png" width="300px"/></td>
+				<td><img src="assets/part_5_CBspheres_lambertian_2048.png" width="300px"/></td>
+			</tr>
+		</table>
 
-		<h2>(Optional) Part 6: Extra Credit Opportunities</h2>
-		Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
-		
-		<h2>Additional Notes (please remove)</h2>
-		<ul>
-			<li>You can also add code if you'd like as so: <code>code code code</code></li>
-			<li>If you'd like to add math equations, 
-				<ul>
-					<li>You can write inline equations like so: \( a^2 + b^2 = c^2 \)</li>
-					<li>You can write display equations like so: \[ a^2 + b^2 = c^2 \]</li>
-				</ul>
-			</li>
-		</ul>
+		<h2>Acknowledgement of AI</h2>
+		I used an LLM to improve the wording of the write-up and cleanup the code. I did not use it to replace my learning or understanding of the material.
 		</div>
 	</body>
 </html>
